@@ -8,7 +8,7 @@ def recv_exact(sock, n):
     while len(data) < n:
         chunk = sock.recv(n - len(data))
         if not chunk:
-            raise ConnectionError("Conexiunea s-a închis.")
+            raise ConnectionError("Conexiunea s-a inchis.")
         data += chunk
     return data
 
@@ -25,7 +25,6 @@ def send_message(sock, plaintext, p, s):
     sock.sendall(struct.pack('>I', len(encoded)) + encoded)
 
 def connect_to_peer(peer, p, s, connections, lock):
-    """Încearcă conectarea cu retry până reușește."""
     while True:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

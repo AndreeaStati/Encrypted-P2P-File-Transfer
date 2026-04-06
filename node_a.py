@@ -34,11 +34,11 @@ def print_peers():
     with lock:
         available = list(connections.keys())
     if available:
-        print("\nPeers conectați:")
+        print("\nPeers conectati:")
         for name in available:
             print(f"  - {name}")
     else:
-        print("\n(!) Niciun peer conectat încă.")
+        print("\n(!) Niciun peer conectat inca.")
     print()
 
 def main():
@@ -51,9 +51,9 @@ def main():
 
     time.sleep(1) 
 
-    print(f"\n[*] {MY_NAME} pornit. Mă conectez la peers...\n")
+    print(f"\n[*] {MY_NAME} pornit. Ma conectez la peers...\n")
     start_all_connections()
-    print(f"\n[*] Gata. Poți trimite mesaje.\n")
+    print(f"\n[*] Gata. Poti trimite mesaje.\n")
 
     peer_names = [p["name"] for p in PEERS]
 
@@ -69,17 +69,17 @@ def main():
             print_peers()
 
         elif cmd == 'all':
-            msg = input("Mesaj către toți: ").strip()
+            msg = input("Mesaj catre toti: ").strip()
             if msg:
                 send_to_all(msg, MY_NAME, connections, lock, p, s)
 
         elif cmd in peer_names:
-            msg = input(f"Mesaj către {cmd}: ").strip()
+            msg = input(f"Mesaj catre {cmd}: ").strip()
             if msg:
                 send_to(cmd, msg, MY_NAME, connections, lock, p, s)
 
         else:
-            print("[!] Comandă necunoscută.")
+            print("[!] Comanda necunoscuta.")
 
 if __name__ == '__main__':
     main()

@@ -8,7 +8,7 @@ def recv_exact(sock, n):
     while len(data) < n:
         chunk = sock.recv(n - len(data))
         if not chunk:
-            raise ConnectionError("Conexiunea s-a închis.")
+            raise ConnectionError("Conexiunea s-a inchis.")
         data += chunk
     return data
 
@@ -40,7 +40,7 @@ def start_server(port, p, s):
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(('0.0.0.0', port))
     srv.listen(10)
-    print(f"[SERVER] (*) Ascultă pe portul {port}...")
+    print(f"[SERVER] (*) Asculta pe portul {port}...")
 
     while True:
         conn, addr = srv.accept()
