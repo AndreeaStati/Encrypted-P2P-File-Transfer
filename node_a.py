@@ -1,6 +1,7 @@
 import threading
 import time
 from blowfish import expand_key
+from p2p_utils import send_file_segmented
 from server import start_server
 from client import connect_to_peer, send_to, send_to_all
 
@@ -59,7 +60,7 @@ def main():
 
     while True:
         print("─" * 45)
-        print(f"Comenzi: all | {' | '.join(peer_names)} | peers | exit")
+        print(f"Comenzi: all | {' | '.join(peer_names)} | file | peers | exit")
         cmd = input(">> ").strip()
 
         if cmd == 'exit':
@@ -77,7 +78,18 @@ def main():
             msg = input(f"Mesaj catre {cmd}: ").strip()
             if msg:
                 send_to(cmd, msg, MY_NAME, connections, lock, p, s)
-
+        elif cmd == 'file':
+            target = input("Catre cine trimiti (Nume Peer): ").strip()
+            path = input("Calea catre fisier: ").strip()
+            
+            with lock:
+                sock = connections.get(target)
+            
+            if sock:
+                from blowfish import encrypt_message
+                send_file_segmented(sock, path, p, s, encrypt_message)
+            else:
+                print("[!] Peer-ul nu este conectat.")
         else:
             print("[!] Comanda necunoscuta.")
 

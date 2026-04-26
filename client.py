@@ -17,12 +17,18 @@ def recv_message(sock):
     msg_len = struct.unpack('>I', raw_len)[0]
     return recv_exact(sock, msg_len).decode('utf-8')
 
+from p2p_utils import send_data_chunked
+
 def send_message(sock, plaintext, p, s):
-    encrypted = encrypt_message(plaintext, p, s)
-    print(f"[CLIENT] [→ PLAINTEXT] {plaintext}")
-    print(f"[CLIENT] [→ CRIPTAT]   {encrypted[:60]}...")
-    encoded = encrypted.encode('utf-8')
-    sock.sendall(struct.pack('>I', len(encoded)) + encoded)
+    from blowfish import encrypt_message
+    print(f"[CLIENT] [→ ORIGINAL] {plaintext[:50]}...")
+    
+    # trimitere date segmentate
+    data_bytes = plaintext.encode('utf-8')
+    send_data_chunked(sock, data_bytes, p, s, encrypt_message)
+    
+    print(f"[CLIENT] [→ STATUS] Mesaj trimis în mai multe blocuri.")
+
 
 def connect_to_peer(peer, p, s, connections, lock):
     while True:

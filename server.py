@@ -21,20 +21,29 @@ def send_message(sock, plaintext, p, s):
     encrypted = encrypt_message(plaintext, p, s)
     encoded = encrypted.encode('utf-8')
     sock.sendall(struct.pack('>I', len(encoded)) + encoded)
-
+from p2p_utils import receive_data_reconstructed
 def handle_incoming(conn, addr, p, s):
-    print(f"\n[SERVER] (+) Conexiune de la {addr[0]}:{addr[1]}")
+    from blowfish import decrypt_message
+    from p2p_utils import receive_data_reconstructed, handle_file_reception, recv_exact
+    
     try:
         while True:
-            encrypted_msg = recv_message(conn)
-            print(f"\n[SERVER] [← CRIPTAT]   {encrypted_msg[:60]}...")
-            plaintext = decrypt_message(encrypted_msg, p, s)
-            print(f"[SERVER] [← DECRIPTAT] {plaintext}")
-    except ConnectionError:
-        print(f"[SERVER] (-) {addr[0]} deconectat.")
-    finally:
-        conn.close()
+            # Citim lungimea primului pachet
+            raw_len = recv_exact(conn, 4)
+            msg_len = struct.unpack('>I', raw_len)[0]
+            data = recv_exact(conn, msg_len).decode('utf-8')
 
+            # Verificăm dacă este metadata de fișier
+            if data.startswith("FILE_METADATA:"):
+                handle_file_reception(conn, p, s, decrypt_message, data)
+            else:
+                # Dacă nu e fișier, e un mesaj normal (dar trebuie să-l tratăm ca segmentat)
+                # Notă: Aici va trebui să ajustezi puțin logica pentru a nu citi lungimea de două ori
+                # O soluție simplă este să trimiți mereu un header de tip [TIP_MESAJ] înainte.
+                print(f"\n[SERVER] [MESAJ] {data}")
+    except:
+        conn.close()
+        
 def start_server(port, p, s):
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
