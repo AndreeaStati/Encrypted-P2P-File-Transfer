@@ -1,6 +1,5 @@
 import threading
 import time
-from blowfish import expand_key
 from p2p_utils import send_file_segmented
 from server import start_server
 from client import connect_to_peer, send_to, send_to_all
@@ -8,14 +7,12 @@ from client import connect_to_peer, send_to, send_to_all
 MY_NAME = "Laptop A"
 MY_PORT = 5555
 PEERS = [
-    {"name": "Laptop B", "ip": "127.0.0.1", "port": 5556},
-    {"name": "Laptop C", "ip": "127.0.0.1", "port": 5557},
+    {"name": "Laptop B", "ip": "127.0.0.1", "port": 5556}    
+#    {"name": "Laptop C", "ip": "127.0.0.1", "port": 5557},
 ]
-KEY = b'cheie_secreta_demo'
 
-p, s = expand_key(KEY)
 
-connections = {}
+connections = {} # Retine acum {'Nume_Peer': {'socket': socket_obj, 'p': p_array, 's': s_array}}
 lock = threading.Lock()
 
 def start_all_connections():
@@ -23,13 +20,13 @@ def start_all_connections():
     for peer in PEERS:
         t = threading.Thread(
             target=connect_to_peer,
-            args=(peer, p, s, connections, lock),
+            args=(peer, connections, lock), 
             daemon=True
         )
         t.start()
         threads.append(t)
-    for t in threads:
-        t.join()
+    #for t in threads:
+    #    t.join()
 
 def print_peers():
     with lock:
@@ -45,7 +42,7 @@ def print_peers():
 def main():
     t_server = threading.Thread(
         target=start_server,
-        args=(MY_PORT, p, s),
+        args=(MY_PORT,),
         daemon=True
     )
     t_server.start()
@@ -72,20 +69,25 @@ def main():
         elif cmd == 'all':
             msg = input("Mesaj catre toti: ").strip()
             if msg:
-                send_to_all(msg, MY_NAME, connections, lock, p, s)
+                send_to_all(msg, MY_NAME, connections, lock) 
 
         elif cmd in peer_names:
             msg = input(f"Mesaj catre {cmd}: ").strip()
             if msg:
-                send_to(cmd, msg, MY_NAME, connections, lock, p, s)
+                send_to(cmd, msg, MY_NAME, connections, lock) 
+                
         elif cmd == 'file':
             target = input("Catre cine trimiti (Nume Peer): ").strip()
             path = input("Calea catre fisier: ").strip()
             
             with lock:
-                sock = connections.get(target)
+                peer_data = connections.get(target)
             
-            if sock:
+            if peer_data:
+                sock = peer_data["socket"]
+                p = peer_data["p"]
+                s = peer_data["s"]
+                
                 from blowfish import encrypt_message
                 send_file_segmented(sock, path, p, s, encrypt_message)
             else:
