@@ -2,7 +2,6 @@ import socket
 import struct
 import time
 from blowfish import encrypt_message, decrypt_message, expand_key 
-from p2p_utils import send_data_chunked
 from blowfish import encrypt_bytes, decrypt_bytes
 import diffie_hellman 
 
@@ -22,15 +21,16 @@ def recv_message(sock):
 
 def send_message(sock, plaintext, p, s):
     from blowfish import encrypt_message
-    print(f"[CLIENT] [→ ORIGINAL] {plaintext[:50]}...")
+    from protocol import send_packet
+
+    print(f"[CLIENT] [ORIGINAL] {plaintext[:50]}...")
     
     encrypted = encrypt_message(plaintext, p, s)
-    encoded = encrypted.encode('utf-8')
+    encoded = encrypted.encode("utf-8")
     
-    import struct
-    sock.sendall(struct.pack('>I', len(encoded)) + encoded)
+    send_packet(sock, "MESSAGE", encoded)
     
-    print(f"[CLIENT] [--> STATUS] Mesaj trimis cu succes.")
+    print(f"[CLIENT] [STATUS] Mesaj trimis cu succes.")
 
 def send_file_to(peer_name, file_path, connections, lock):
     from p2p_utils import send_file_segmented

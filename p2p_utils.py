@@ -1,54 +1,17 @@
-import struct
 import os
+import json
+import math
+
+from protocol import (
+    send_packet,
+    receive_packet,
+    PACKET_FILE_START,
+    PACKET_FILE_CHUNK,
+    PACKET_FILE_END
+)
 
 
-def recv_exact(sock, n):
-    data = b''
-
-    while len(data) < n:
-        chunk = sock.recv(n - len(data))
-
-        if not chunk:
-            raise ConnectionError("Conexiune inchisa.")
-
-        data += chunk
-
-    return data
-
-
-def send_data_chunked(sock, data_bytes, p, s, encrypt_bytes_func, block_size=4096):
-    total_size = len(data_bytes)
-
-    # trimitem dimensiunea originala a fisierului
-    sock.sendall(struct.pack(">I", total_size))
-
-    for i in range(0, total_size, block_size):
-        chunk = data_bytes[i:i + block_size]
-
-        encrypted_chunk = encrypt_bytes_func(chunk, p, s)
-
-        # trimitem dimensiunea bucatii criptate + bucata criptat
-        sock.sendall(struct.pack(">I", len(encrypted_chunk)))
-        sock.sendall(encrypted_chunk)
-
-
-def receive_data_reconstructed(sock, p, s, decrypt_bytes_func):
-    raw_total_size = recv_exact(sock, 4)
-    total_expected = struct.unpack(">I", raw_total_size)[0]
-
-    reconstructed_data = bytearray()
-
-    while len(reconstructed_data) < total_expected:
-        raw_seg_len = recv_exact(sock, 4)
-        seg_len = struct.unpack(">I", raw_seg_len)[0]
-
-        encrypted_seg = recv_exact(sock, seg_len)
-        decrypted_seg = decrypt_bytes_func(encrypted_seg, p, s)
-
-        reconstructed_data.extend(decrypted_seg)
-
-    # taiem exact la dimensiunea initiala
-    return bytes(reconstructed_data[:total_expected])
+CHUNK_SIZE = 4096
 
 
 def send_file_segmented(sock, file_path, p, s, encrypt_bytes_func):
@@ -58,31 +21,112 @@ def send_file_segmented(sock, file_path, p, s, encrypt_bytes_func):
 
     file_name = os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
+    total_chunks = math.ceil(file_size / CHUNK_SIZE)
 
-    header = f"FILE_METADATA:{file_name}:{file_size}"
-    header_bytes = header.encode("utf-8")
+    metadata = {
+        "file_name": file_name,
+        "file_size": file_size,
+        "chunk_size": CHUNK_SIZE,
+        "total_chunks": total_chunks
+    }
 
-    sock.sendall(struct.pack(">I", len(header_bytes)))
-    sock.sendall(header_bytes)
+    send_packet(
+        sock,
+        PACKET_FILE_START,
+        json.dumps(metadata).encode("utf-8")
+    )
+
+    print(f"[CLIENT] Incep trimiterea fisierului: {file_name}")
+    print(f"[CLIENT] Dimensiune: {file_size} bytes")
+    print(f"[CLIENT] Total pachete: {total_chunks}")
+
+    chunk_index = 0
 
     with open(file_path, "rb") as f:
-        data = f.read()
+        while True:
+            chunk = f.read(CHUNK_SIZE)
 
-    send_data_chunked(sock, data, p, s, encrypt_bytes_func)
+            if not chunk:
+                break
 
-    print(f"[CLIENT] Fișierul '{file_name}' a fost trimis cu succes.")
+            encrypted_chunk = encrypt_bytes_func(chunk, p, s)
+
+            chunk_payload = {
+                "chunk_index": chunk_index,
+                "total_chunks": total_chunks,
+                "encrypted_data": encrypted_chunk.hex()
+            }
+
+            send_packet(
+                sock,
+                PACKET_FILE_CHUNK,
+                json.dumps(chunk_payload).encode("utf-8")
+            )
+
+            print(f"[CLIENT] Pachet trimis: {chunk_index + 1}/{total_chunks}")
+
+            chunk_index += 1
+
+    end_payload = {
+        "file_name": file_name,
+        "total_chunks": total_chunks
+    }
+
+    send_packet(
+        sock,
+        PACKET_FILE_END,
+        json.dumps(end_payload).encode("utf-8")
+    )
+
+    print(f"[CLIENT] Fisierul '{file_name}' a fost trimis cu succes.")
 
 
-def handle_file_reception(sock, p, s, decrypt_bytes_func, metadata):
-    _, file_name, file_size = metadata.split(":")
+def handle_file_reception(sock, p, s, decrypt_bytes_func, first_payload):
+    metadata = json.loads(first_payload.decode("utf-8"))
 
-    print(f"[SERVER] Se primeste fișierul: {file_name} ({file_size} bytes)")
-
-    file_data = receive_data_reconstructed(sock, p, s, decrypt_bytes_func)
+    file_name = metadata["file_name"]
+    file_size = metadata["file_size"]
+    total_chunks = metadata["total_chunks"]
 
     output_path = f"primit_{file_name}"
 
-    with open(output_path, "wb") as f:
-        f.write(file_data)
+    print(f"[SERVER] Incep primirea fisierului: {file_name}")
+    print(f"[SERVER] Dimensiune asteptata: {file_size} bytes")
+    print(f"[SERVER] Total pachete asteptate: {total_chunks}")
 
-    print(f"[SERVER] Fisier salvat ca: {output_path}")
+    received_chunks = 0
+
+    with open(output_path, "wb") as f:
+        while True:
+            packet_type, payload = receive_packet(sock)
+
+            if packet_type == PACKET_FILE_CHUNK:
+                chunk_info = json.loads(payload.decode("utf-8"))
+
+                chunk_index = chunk_info["chunk_index"]
+                encrypted_data = bytes.fromhex(chunk_info["encrypted_data"])
+
+                decrypted_chunk = decrypt_bytes_func(encrypted_data, p, s)
+
+                f.write(decrypted_chunk)
+
+                received_chunks += 1
+
+                print(
+                    f"[SERVER] Pachet primit: "
+                    f"{chunk_index + 1}/{total_chunks}"
+                )
+
+            elif packet_type == PACKET_FILE_END:
+                print(f"[SERVER] Transfer finalizat pentru: {file_name}")
+                break
+
+    final_size = os.path.getsize(output_path)
+
+    if final_size == file_size:
+        print(f"[SERVER] Fisier salvat corect ca: {output_path}")
+    else:
+        print(
+            f"[SERVER] Atentie: dimensiune diferita. "
+            f"Asteptat {file_size}, primit {final_size} bytes."
+        )

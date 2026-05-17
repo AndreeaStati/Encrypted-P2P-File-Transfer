@@ -3,7 +3,7 @@ import struct
 import threading
 from blowfish import decrypt_message, encrypt_message, expand_key, decrypt_bytes
 import diffie_hellman 
-
+from protocol import receive_packet, PACKET_FILE_START
 def recv_exact(sock, n):
     data = b''
     while len(data) < n:
@@ -26,24 +26,23 @@ def send_message(sock, plaintext, p, s):
 def handle_incoming(conn, addr, p, s):
     from p2p_utils import handle_file_reception
     from blowfish import decrypt_message, decrypt_bytes
+    from protocol import receive_packet, PACKET_FILE_START
     
     try:
         while True:
-            raw_len = recv_exact(conn, 4)
-            msg_len = struct.unpack('>I', raw_len)[0]
-            data = recv_exact(conn, msg_len).decode('utf-8')
+            packet_type, payload = receive_packet(conn)
 
-            if data.startswith("FILE_METADATA:"):
-                 handle_file_reception(conn, p, s, decrypt_bytes, data)
+            if packet_type == PACKET_FILE_START:
+                handle_file_reception(conn, p, s, decrypt_bytes, payload)
             else:
                 try:
-                    
+                    data = payload.decode("utf-8")
                     text_clar = decrypt_message(data, p, s)
                     print(f"\n[SERVER] [MESAJ DECRIPTAT] {text_clar}")
                 except Exception as e:
-                    print(f"\n[SERVER] [MESAJ CRIPTAT] {data} (Eroare decriptare: {e})")
+                    print(f"\n[SERVER] Eroare decriptare mesaj: {e}")
                     
-    except Exception as e:
+    except Exception:
         print(f"[SERVER] Conexiunea cu {addr} s-a inchis.")
         conn.close()
         
