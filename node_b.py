@@ -86,8 +86,8 @@ def main():
                 p = peer_data["p"]
                 s = peer_data["s"]
                 
-                from blowfish import encrypt_message
-                send_file_segmented(sock, path, p, s, encrypt_message)
+                from blowfish import encrypt_bytes
+                send_file_segmented(sock, path, p, s, encrypt_bytes)
             else:
                 print("[!] Peer-ul nu este conectat.")
         else:

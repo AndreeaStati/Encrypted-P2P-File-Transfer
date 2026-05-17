@@ -120,3 +120,41 @@ def decrypt_message(encrypted_b64, p, s):
         raise ValueError("Padding invalid.")
 
     return bytes_to_str(decrypted[:-pad_len])
+
+
+def encrypt_bytes(data: bytes, p, s) -> bytes:
+    pad_len = 8 - (len(data) % 8)
+    data += bytes([pad_len] * pad_len)
+
+    encrypted = bytearray()
+
+    for i in range(0, len(data), 8):
+        block = data[i:i + 8]
+        block_int = int.from_bytes(block, "big")
+        enc_block = encrypt_block(block_int, p, s)
+        encrypted.extend(enc_block.to_bytes(8, "big"))
+
+    return bytes(encrypted)
+
+
+def decrypt_bytes(encrypted_data: bytes, p, s) -> bytes:
+    if len(encrypted_data) % 8 != 0:
+        raise ValueError("Datele criptate au lungime invalida.")
+
+    decrypted = bytearray()
+
+    for i in range(0, len(encrypted_data), 8):
+        block = encrypted_data[i:i + 8]
+        block_int = int.from_bytes(block, "big")
+        dec_block = decrypt_block(block_int, p, s)
+        decrypted.extend(dec_block.to_bytes(8, "big"))
+
+    pad_len = decrypted[-1]
+
+    if pad_len < 1 or pad_len > 8:
+        raise ValueError("Padding invalid.")
+
+    if decrypted[-pad_len:] != bytes([pad_len] * pad_len):
+        raise ValueError("Padding invalid.")
+
+    return bytes(decrypted[:-pad_len])

@@ -3,6 +3,7 @@ import struct
 import time
 from blowfish import encrypt_message, decrypt_message, expand_key 
 from p2p_utils import send_data_chunked
+from blowfish import encrypt_bytes, decrypt_bytes
 import diffie_hellman 
 
 def recv_exact(sock, n):
@@ -31,6 +32,22 @@ def send_message(sock, plaintext, p, s):
     
     print(f"[CLIENT] [--> STATUS] Mesaj trimis cu succes.")
 
+def send_file_to(peer_name, file_path, connections, lock):
+    from p2p_utils import send_file_segmented
+    from blowfish import encrypt_bytes
+
+    with lock:
+        peer_data = connections.get(peer_name)
+
+    if not peer_data:
+        print(f"[CLIENT] (!) {peer_name} nu e conectat.")
+        return
+
+    sock = peer_data["socket"]
+    p = peer_data["p"]
+    s = peer_data["s"]
+
+    send_file_segmented(sock, file_path, p, s, encrypt_bytes)
 
 def connect_to_peer(peer, connections, lock):
     while True:

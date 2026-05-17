@@ -1,7 +1,7 @@
 import socket
 import struct
 import threading
-from blowfish import decrypt_message, encrypt_message, expand_key 
+from blowfish import decrypt_message, encrypt_message, expand_key, decrypt_bytes
 import diffie_hellman 
 
 def recv_exact(sock, n):
@@ -24,8 +24,8 @@ def send_message(sock, plaintext, p, s):
     sock.sendall(struct.pack('>I', len(encoded)) + encoded)
 
 def handle_incoming(conn, addr, p, s):
-    from p2p_utils import receive_data_reconstructed, handle_file_reception
-    from blowfish import decrypt_message
+    from p2p_utils import handle_file_reception
+    from blowfish import decrypt_message, decrypt_bytes
     
     try:
         while True:
@@ -34,7 +34,7 @@ def handle_incoming(conn, addr, p, s):
             data = recv_exact(conn, msg_len).decode('utf-8')
 
             if data.startswith("FILE_METADATA:"):
-                handle_file_reception(conn, p, s, decrypt_message, data)
+                 handle_file_reception(conn, p, s, decrypt_bytes, data)
             else:
                 try:
                     
