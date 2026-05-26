@@ -14,7 +14,7 @@ from protocol import (
 CHUNK_SIZE = 4096
 
 
-def send_file_segmented(sock, file_path, p, s, encrypt_bytes_func):
+def send_file_segmented(sock, file_path, p, s, encrypt_bytes_func, progress_callback=None):
     if not os.path.exists(file_path):
         print(f"[ERROR] Fisierul {file_path} nu exista.")
         return
@@ -63,9 +63,11 @@ def send_file_segmented(sock, file_path, p, s, encrypt_bytes_func):
                 json.dumps(chunk_payload).encode("utf-8")
             )
 
-            print(f"[CLIENT] Pachet trimis: {chunk_index + 1}/{total_chunks}")
-
+            # print(f"[CLIENT] Pachet trimis: {chunk_index + 1}/{total_chunks}")
             chunk_index += 1
+
+            if progress_callback is not None:
+                progress_callback(chunk_index, total_chunks)
 
     end_payload = {
         "file_name": file_name,

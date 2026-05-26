@@ -1,4 +1,5 @@
 import base64
+import os
 from constants import P_INIT, S_INIT
 
 def str_to_bytes(text):
@@ -6,6 +7,44 @@ def str_to_bytes(text):
 
 def bytes_to_str(data):
     return data.decode("utf-8")
+
+BLOCK_SIZE = 8
+
+
+def xor_bytes(a, b):
+    return bytes(x ^ y for x, y in zip(a, b))
+
+
+def pad_data(data: bytes) -> bytes:
+    pad_len = BLOCK_SIZE - (len(data) % BLOCK_SIZE)
+    return data + bytes([pad_len] * pad_len)
+
+
+def unpad_data(data: bytes) -> bytes:
+    if not data:
+        raise ValueError("Date goale la eliminarea padding-ului.")
+
+    pad_len = data[-1]
+
+    if pad_len < 1 or pad_len > BLOCK_SIZE:
+        raise ValueError("Padding invalid.")
+
+    if data[-pad_len:] != bytes([pad_len] * pad_len):
+        raise ValueError("Padding invalid.")
+
+    return data[:-pad_len]
+
+
+def encrypt_block_bytes(block: bytes, p, s) -> bytes:
+    block_int = int.from_bytes(block, "big")
+    encrypted_int = encrypt_block(block_int, p, s)
+    return encrypted_int.to_bytes(BLOCK_SIZE, "big")
+
+
+def decrypt_block_bytes(block: bytes, p, s) -> bytes:
+    block_int = int.from_bytes(block, "big")
+    decrypted_int = decrypt_block(block_int, p, s)
+    return decrypted_int.to_bytes(BLOCK_SIZE, "big")
 
 def calculate(L, s):
     a = (L >> 24) & 0xff
@@ -80,81 +119,74 @@ def expand_key(key_bytes):
     return p, s
 
 
-def encrypt_message(message, p, s):
-    data = str_to_bytes(message)
-
-    pad_len = 8 - (len(data) % 8)
-    data += bytes([pad_len] * pad_len)
-
-    encrypted = bytearray()
-
-    for i in range(0, len(data), 8):
-        block = data[i:i + 8]
-        block_int = int.from_bytes(block, "big")
-        enc_block = encrypt_block(block_int, p, s)
-        encrypted.extend(enc_block.to_bytes(8, "big"))
-
-    return base64.b64encode(encrypted).decode("utf-8")
-
-
-def decrypt_message(encrypted_b64, p, s):
-    data = base64.b64decode(encrypted_b64)
-
-    if len(data) % 8 != 0:
-        raise ValueError("Datele criptate au lungime invalida.")
-
-    decrypted = bytearray()
-
-    for i in range(0, len(data), 8):
-        block = data[i:i + 8]
-        block_int = int.from_bytes(block, "big")
-        dec_block = decrypt_block(block_int, p, s)
-        decrypted.extend(dec_block.to_bytes(8, "big"))
-
-    pad_len = decrypted[-1]
-
-    if pad_len < 1 or pad_len > 8:
-        raise ValueError("Padding invalid.")
-
-    if decrypted[-pad_len:] != bytes([pad_len] * pad_len):
-        raise ValueError("Padding invalid.")
-
-    return bytes_to_str(decrypted[:-pad_len])
-
-
 def encrypt_bytes(data: bytes, p, s) -> bytes:
-    pad_len = 8 - (len(data) % 8)
-    data += bytes([pad_len] * pad_len)
+    """
+    Criptare Blowfish in modul CBC.
+    Returneaza: IV + ciphertext
+    """
+    iv = os.urandom(BLOCK_SIZE)
+    padded_data = pad_data(data)
 
     encrypted = bytearray()
+    encrypted.extend(iv)
 
-    for i in range(0, len(data), 8):
-        block = data[i:i + 8]
-        block_int = int.from_bytes(block, "big")
-        enc_block = encrypt_block(block_int, p, s)
-        encrypted.extend(enc_block.to_bytes(8, "big"))
+    previous_block = iv
+
+    for i in range(0, len(padded_data), BLOCK_SIZE):
+        block = padded_data[i:i + BLOCK_SIZE]
+
+        xored_block = xor_bytes(block, previous_block)
+        encrypted_block = encrypt_block_bytes(xored_block, p, s)
+
+        encrypted.extend(encrypted_block)
+
+        previous_block = encrypted_block
 
     return bytes(encrypted)
 
 
 def decrypt_bytes(encrypted_data: bytes, p, s) -> bytes:
-    if len(encrypted_data) % 8 != 0:
-        raise ValueError("Datele criptate au lungime invalida.")
+    """
+    Decriptare Blowfish in modul CBC.
+    Primeste: IV + ciphertext
+    """
+    if len(encrypted_data) < BLOCK_SIZE * 2:
+        raise ValueError("Datele criptate sunt prea scurte pentru CBC.")
+
+    iv = encrypted_data[:BLOCK_SIZE]
+    ciphertext = encrypted_data[BLOCK_SIZE:]
+
+    if len(ciphertext) % BLOCK_SIZE != 0:
+        raise ValueError("Ciphertext invalid: lungimea nu este multiplu de 8.")
 
     decrypted = bytearray()
 
-    for i in range(0, len(encrypted_data), 8):
-        block = encrypted_data[i:i + 8]
-        block_int = int.from_bytes(block, "big")
-        dec_block = decrypt_block(block_int, p, s)
-        decrypted.extend(dec_block.to_bytes(8, "big"))
+    previous_block = iv
 
-    pad_len = decrypted[-1]
+    for i in range(0, len(ciphertext), BLOCK_SIZE):
+        encrypted_block = ciphertext[i:i + BLOCK_SIZE]
 
-    if pad_len < 1 or pad_len > 8:
-        raise ValueError("Padding invalid.")
+        decrypted_block = decrypt_block_bytes(encrypted_block, p, s)
+        plain_block = xor_bytes(decrypted_block, previous_block)
 
-    if decrypted[-pad_len:] != bytes([pad_len] * pad_len):
-        raise ValueError("Padding invalid.")
+        decrypted.extend(plain_block)
 
-    return bytes(decrypted[:-pad_len])
+        previous_block = encrypted_block
+
+    return unpad_data(bytes(decrypted))
+
+
+def encrypt_message(message, p, s):
+    data = str_to_bytes(message)
+
+    encrypted_data = encrypt_bytes(data, p, s)
+
+    return base64.b64encode(encrypted_data).decode("utf-8")
+
+
+def decrypt_message(encrypted_b64, p, s):
+    encrypted_data = base64.b64decode(encrypted_b64)
+
+    decrypted_data = decrypt_bytes(encrypted_data, p, s)
+
+    return bytes_to_str(decrypted_data)
