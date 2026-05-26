@@ -23,7 +23,7 @@ def send_message(sock, plaintext, p, s):
     encoded = encrypted.encode('utf-8')
     sock.sendall(struct.pack('>I', len(encoded)) + encoded)
 
-def handle_incoming(conn, addr, p, s):
+def handle_incoming(conn, addr, p, s, log_callback=None):
     from p2p_utils import handle_file_reception
     from blowfish import decrypt_message, decrypt_bytes
     from protocol import receive_packet, PACKET_FILE_START
@@ -38,20 +38,28 @@ def handle_incoming(conn, addr, p, s):
                 try:
                     data = payload.decode("utf-8")
                     text_clar = decrypt_message(data, p, s)
-                    print(f"\n[SERVER] [MESAJ DECRIPTAT] {text_clar}")
+                    # print(f"\n[SERVER] [MESAJ DECRIPTAT] {text_clar}")
+                    emit(log_callback, f"[SERVER] Mesaj decriptat: {text_clar}")
                 except Exception as e:
                     print(f"\n[SERVER] Eroare decriptare mesaj: {e}")
                     
     except Exception:
         print(f"[SERVER] Conexiunea cu {addr} s-a inchis.")
         conn.close()
+
+def emit(callback, message):
+        if callback:
+            callback(message)
+        else:
+            print(message)
         
-def start_server(port):
+def start_server(port, log_callback=None):
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(('0.0.0.0', port))
     srv.listen(10)
-    print(f"[SERVER] (*) Asculta pe portul {port}...")
+    # print(f"[SERVER] (*) Asculta pe portul {port}...")
+    emit(log_callback, f"[SERVER] Asculta pe portul {port}")
 
     while True:
         conn, addr = srv.accept()
@@ -78,7 +86,7 @@ def start_server(port):
             
             t = threading.Thread(
                 target=handle_incoming,
-                args=(conn, addr, p, s),
+                args=(conn, addr, p, s, log_callback),
                 daemon=True
             )
             t.start()
@@ -86,3 +94,5 @@ def start_server(port):
             print(f"[SERVER] Eroare la negocierea cheii cu {addr}: {e}")
             conn.close()
         # --- SFARSIT SCHIMB DIFFIE-HELLMAN ---
+    
+    

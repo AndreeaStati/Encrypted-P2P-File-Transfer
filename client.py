@@ -102,8 +102,13 @@ def send_to(peer_name, message, my_name, connections, lock):
     
     send_message(sock, f"[{my_name}] {message}", p, s)
 
-def send_to_all(message, my_name, connections, lock):
+def send_to_all(message, sender_name, connections, lock):
     with lock:
-        names = list(connections.keys())
-    for name in names:
-        send_to(name, message, my_name, connections, lock)
+        peer_names = list(connections.keys())
+
+    if not peer_names:
+        print("[CLIENT] Nu exista peers conectati.")
+        return
+
+    for peer_name in peer_names:
+        send_to(peer_name, message, sender_name, connections, lock)
